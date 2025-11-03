@@ -1,17 +1,13 @@
-import json, re, requests
+import json, re, os, time, requests
 from bs4 import BeautifulSoup
 from pathlib import Path
-import os
-
-
 
 # ===== KONFIG =====
-NTFY_TOPIC = "gosia-canyon-alert"  # <- Twój temat w apce ntfy
-WATCH_SIZE = "2XS"                 # <- tylko ten rozmiar wywołuje alert
-ALERT_ONLY_WHEN_AVAILABLE = True   # True = powiadamiaj tylko gdy 2XS -> available
+NTFY_TOPIC = "gosia-canyon-alert"   # <- nazwa tematu w apce ntfy
+WATCH_SIZE = "2XS"                  # <- obserwowany rozmiar
+ALERT_ONLY_WHEN_AVAILABLE = True    # True = alert tylko przy przejściu na "available"
+FORCE_ALERT = os.getenv("FORCE_ALERT") == "1"  # wymuś powiadomienie na starcie (test)
 # ===================
-FORCE_ALERT = os.getenv("FORCE_ALERT") == "1"
-
 
 TARGETS = [
     {
@@ -25,20 +21,31 @@ TARGETS = [
 ]
 
 STATE_FILE = Path("watch_state.json")
-HEADERS = {"User-Agent": "Mozilla/5.0 (CanyonSizeWatcher/1.0)"}
+HEADERS = {
+    # solidniejsze nagłówki – mniej szans na blokadę
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Connection": "keep-alive",
+}
 TIMEOUT = 25
 SIZE_ORDER = ["2XS", "XS", "S", "M", "L", "XL", "2XL"]
 
 def notify(title: str, message: str):
     try:
-        requests.post(
+        r = requests.post(
             f"https://ntfy.sh/{NTFY_TOPIC}",
             data=message.encode("utf-8"),
             headers={"Title": title, "Priority": "high"},
             timeout=10,
         )
-    except Exception:
-        pass
+        # pomocny log do Actions
+        print(f"[ntfy] status={r.status_code}")
+    except Exception as e:
+        print(f"[ntfy] exception: {e}")
 
 def load_state():
     if STATE_FILE.exists():
@@ -52,18 +59,25 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def get_html(url: str) -> str:
-    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.text
+    # prosty retry na wypadek 403/503
+    last_exc = None
+    for i in range(3):
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+            if r.status_code >= 500:
+                raise RuntimeError(f"HTTP {r.status_code}")
+            r.raise_for_status()
+            return r.text
+        except Exception as e:
+            last_exc = e
+            print(f"[fetch] próba {i+1}/3 nieudana: {e}")
+            time.sleep(2 + i)
+    raise last_exc
 
 def norm(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip()
 
 def parse_size_statuses(html: str) -> dict:
-    """
-    Zwraca mapę { "2XS": "available"/"unavailable"/"unknown", ... }
-    na podstawie klas przycisków rozmiarów.
-    """
     soup = BeautifulSoup(html, "html.parser")
     statuses = {}
     for btn in soup.select("button.productConfiguration__selectVariant"):
@@ -74,7 +88,6 @@ def parse_size_statuses(html: str) -> dict:
                 size = t
         if not size:
             continue
-
         classes = " ".join(btn.get("class", [])).lower()
         if "productconfiguration__selectvariant--purchasable" in classes:
             statuses[size] = "available"
@@ -82,17 +95,15 @@ def parse_size_statuses(html: str) -> dict:
             statuses[size] = "unavailable"
         else:
             statuses[size] = statuses.get(size, "unknown")
-
     return statuses
 
 def sizes_snapshot_lines(statuses: dict) -> list:
-    lines = []
-    for s in SIZE_ORDER:
-        st = statuses.get(s, "—")
-        lines.append(f"{s}: {st}")
-    return lines
+    return [f"{s}: {statuses.get(s, '—')}" for s in SIZE_ORDER]
 
 def main():
+    # 1) WYŚLIJ „BOOT PING” NA STARCIE (zawsze), żeby mieć 100% potwierdzenia działania
+    notify("🟢 Watcher start", "Skrypt wystartował i działa (boot ping).")
+
     state = load_state()
     any_errors = False
 
@@ -100,45 +111,35 @@ def main():
         try:
             html = get_html(t["url"])
             size_map = parse_size_statuses(html)
-            if FORCE_ALERT:
-                snapshot = "\n".join(sizes_snapshot_lines(size_map))
-                msg = (
-                    f"{t['name']} – FORCED ALERT (test)\n{t['url']}\n\n"
-                    f"Aktualne rozmiary:\n{snapshot}"
-                )
-                print("[TEST] Wysyłam wymuszone powiadomienie ntfy")
-                notify("🔔 TEST – wymuszone powiadomienie", msg)
 
-            # log do Actions: pełna tabelka
             print(f"\n=== {t['name']} ===")
             for line in sizes_snapshot_lines(size_map):
                 print(line)
 
-            # stan obserwowanego rozmiaru
+            # 2) FORCE ALERT – jeśli ustawiony w workflow, wyślij snapshot niezależnie od zmian
+            if FORCE_ALERT:
+                snapshot = "\n".join(sizes_snapshot_lines(size_map))
+                msg = f"{t['name']} – FORCED ALERT\n{t['url']}\n\n{snapshot}"
+                notify("🔔 TEST – wymuszone powiadomienie", msg)
+
+            # 3) Normalna logika zmian dla 2XS
             new_val = size_map.get(WATCH_SIZE, "unknown")
             key = f"{t['name']}|{WATCH_SIZE}"
             prev_val = state.get(key)
 
             should_alert = False
             if prev_val is None:
-                # pierwszy zapis – tylko zapamiętaj
-                state[key] = new_val
+                state[key] = new_val  # pierwszy zapis – bez alertu
             else:
                 if new_val != prev_val:
-                    if ALERT_ONLY_WHEN_AVAILABLE:
-                        should_alert = (new_val == "available")
-                    else:
-                        should_alert = True
-
-                    
+                    should_alert = (new_val == "available") if ALERT_ONLY_WHEN_AVAILABLE else True
                     state[key] = new_val
 
             if should_alert:
                 snapshot = "\n".join(sizes_snapshot_lines(size_map))
                 msg = (
                     f"{t['name']} – {WATCH_SIZE}: {prev_val} → {new_val}\n"
-                    f"{t['url']}\n\n"
-                    f"Aktualne rozmiary:\n{snapshot}"
+                    f"{t['url']}\n\nAktualne rozmiary:\n{snapshot}"
                 )
                 notify("🔔 Canyon 2XS zmiana dostępności", msg)
 
