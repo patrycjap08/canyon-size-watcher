@@ -42,16 +42,22 @@ TIMEOUT = 25
 SIZE_ORDER = ["2XS", "XS", "S", "M", "L", "XL", "2XL"]
 
 def notify(title: str, message: str):
-    # Nagłówki HTTP muszą być ASCII -> usuń/napraw emoji w Title
-    safe_title = title.encode("ascii", "ignore").decode("ascii") or "Notification"
+    # Nagłówki HTTP muszą być czystym ASCII, bez \r \n i bez spacji na początku.
+    def safe_header(s: str) -> str:
+        s = (s or "").replace("\r", " ").replace("\n", " ")
+        s = " ".join(s.split())           # zbicie wielokrotnych spacji i obcięcie brzegów
+        s = s.encode("ascii", "ignore").decode("ascii")  # wytnij emoji/diakrytyki
+        return s or "Notification"
+
+    hdrs = {"Title": safe_header(title), "Priority": "high"}
     try:
         r = requests.post(
             f"https://ntfy.sh/{NTFY_TOPIC}",
-            data=message.encode("utf-8"),          # treść może być UTF-8
-            headers={"Title": safe_title, "Priority": "high"},
+            data=message.encode("utf-8"),  # treść może być UTF-8
+            headers=hdrs,
             timeout=12,
         )
-        print(f"[ntfy] HTTP {r.status_code}")
+        print(f"[ntfy] HTTP {r.status_code} Title='{hdrs['Title']}'")
     except Exception as e:
         print(f"[ntfy] exception: {e}")
 
