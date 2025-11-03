@@ -2,7 +2,7 @@ name: canyon-size-watcher
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # co 15 minut
+    - cron: "*/10 * * * *"   # co 15 minut
   workflow_dispatch:         # pozwala uruchomić ręcznie z karty Actions
 
 jobs:
