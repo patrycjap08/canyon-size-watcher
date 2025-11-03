@@ -2,14 +2,14 @@ name: canyon-size-watcher
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/10 * * * *"     # co 15 minut (na test możesz kliknąć ręcznie)
   workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      NTFY_TOPIC: "gosia-canyon-alert"   # <<< USTAW TU DOKŁADNIE TEN SAM TEMAT CO W APLIKACJI
+      NTFY_TOPIC: "gosia-canyon-alert"   # <- wpisz DOKŁADNIE temat z apki ntfy
 
     steps:
       - uses: actions/checkout@v4
@@ -29,27 +29,23 @@ jobs:
 
       - name: Boot ping (curl)
         run: |
-          echo "NTFY_TOPIC=${NTFY_TOPIC}"
           curl -H "Title: 🟢 Boot ping (curl)" -H "Priority: high" \
                -d "Workflow wystartował" \
                "https://ntfy.sh/${NTFY_TOPIC}"
 
-      - name: Run watcher (FORCE_ALERT=1 na test)
+      - name: Run watcher (TEST: FORCE + SIMULATE)
         env:
           NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
-          FORCE_ALERT: "1"
+          WATCH_SIZE: "2XS"
+          ALERT_ONLY_WHEN_AVAILABLE: "1"
+          FORCE_ALERT: "1"                # << WYŚLE snapshot z realnej strony
+          SIMULATE_CHANGE: "available"    # << ZASYMULUJE zmianę 2XS -> available
+          # SIMULATE_ONLY_TARGET: "R138_P01"  # odkomentuj, by testować tylko 1 kolor
         run: python watcher.py
-      - name: Run watcher (simulate AVAILABLE once)
-        env:
-          NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
-          SIMULATE_CHANGE: "available"       # <- tu wymuszamy "pojawiło się"
-          # SIMULATE_ONLY_TARGET: "R138_P01" # <- opcjonalnie: przetestuj tylko 1 kolor
-        run: python watcher.py
-
 
       - name: Finish ping (curl) - zawsze
         if: always()
         run: |
           curl -H "Title: ✅ Finish ping (curl)" -H "Priority: high" \
-               -d "Workflow zakończony (sprawdź logi)" \
+               -d "Workflow zakończony (sprawdź logi w Actions)" \
                "https://ntfy.sh/${NTFY_TOPIC}"
