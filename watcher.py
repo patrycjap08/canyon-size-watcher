@@ -1,12 +1,17 @@
 import json, re, requests
 from bs4 import BeautifulSoup
 from pathlib import Path
+import os
+
+
 
 # ===== KONFIG =====
 NTFY_TOPIC = "gosia-canyon-alert"  # <- Twój temat w apce ntfy
 WATCH_SIZE = "2XS"                 # <- tylko ten rozmiar wywołuje alert
 ALERT_ONLY_WHEN_AVAILABLE = True   # True = powiadamiaj tylko gdy 2XS -> available
 # ===================
+FORCE_ALERT = os.getenv("FORCE_ALERT") == "1"
+
 
 TARGETS = [
     {
@@ -95,12 +100,14 @@ def main():
         try:
             html = get_html(t["url"])
             size_map = parse_size_statuses(html)
-            # >>> TEST: wymuś jedno powiadomienie ze snapshotem (potem usuń te linie) <<<
-            snapshot = "\n".join(sizes_snapshot_lines(size_map))
-            msg = f"{t['name']} – przegląd rozmiarów\n{t['url']}\n\n{snapshot}"
-            notify("🔔 TEST – snapshot rozmiarów", msg)
-            # <<< KONIEC TESTU >>>
-
+            if FORCE_ALERT:
+                snapshot = "\n".join(sizes_snapshot_lines(size_map))
+                msg = (
+                    f"{t['name']} – FORCED ALERT (test)\n{t['url']}\n\n"
+                    f"Aktualne rozmiary:\n{snapshot}"
+                )
+                print("[TEST] Wysyłam wymuszone powiadomienie ntfy")
+                notify("🔔 TEST – wymuszone powiadomienie", msg)
 
             # log do Actions: pełna tabelka
             print(f"\n=== {t['name']} ===")
