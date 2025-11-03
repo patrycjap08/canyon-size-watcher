@@ -112,10 +112,8 @@ def main():
                 state[key] = new_val
             else:
                 if new_val != prev_val:
-                    if ALERT_ONLY_WHEN_AVAILABLE:
-                        should_alert = True
-                    else:
-                        should_alert = True
+                    should_alert = True
+                    
                     state[key] = new_val
 
             if should_alert:
