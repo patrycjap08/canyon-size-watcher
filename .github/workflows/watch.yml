@@ -1,0 +1,28 @@
+name: canyon-size-watcher
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # co 15 minut
+  workflow_dispatch:         # pozwala uruchomić ręcznie z karty Actions
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: watch_state.json
+          key: canyon-watcher-state-v1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4
+
+      - name: Run watcher
+        run: python watcher.py
