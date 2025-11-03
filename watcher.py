@@ -41,26 +41,22 @@ HEADERS = {
 TIMEOUT = 25
 SIZE_ORDER = ["2XS", "XS", "S", "M", "L", "XL", "2XL"]
 
-def notify(title: str, message: str):
-    # Nagłówki HTTP muszą być czystym ASCII, bez \r \n i bez spacji na początku.
-    def safe_header(s: str) -> str:
-        s = (s or "").replace("\r", " ").replace("\n", " ")
-        s = " ".join(s.split())           # zbicie wielokrotnych spacji i obcięcie brzegów
-        s = s.encode("ascii", "ignore").decode("ascii")  # wytnij emoji/diakrytyki
-        return s or "Notification"
+from urllib.parse import quote
 
-    hdrs = {"Title": safe_header(title), "Priority": "high"}
+def notify(title: str, message: str):
+    # Zrób bezpieczny tytuł: usuń CR/LF, zredukuj spacje, wytnij znaki nie-ASCII
+    t = (title or "").replace("\r", " ").replace("\n", " ")
+    t = " ".join(t.split())  # usuwa leading/trailing i wielokrotne spacje
+    t_ascii = t.encode("ascii", "ignore").decode("ascii") or "Notification"
+
+    # Wysyłamy tytuł jako parametr URL, nie jako nagłówek
+    url = f"https://ntfy.sh/{NTFY_TOPIC}?title={quote(t_ascii)}"
+
     try:
-        r = requests.post(
-            f"https://ntfy.sh/{NTFY_TOPIC}",
-            data=message.encode("utf-8"),  # treść może być UTF-8
-            headers=hdrs,
-            timeout=12,
-        )
-        print(f"[ntfy] HTTP {r.status_code} Title='{hdrs['Title']}'")
+        r = requests.post(url, data=message.encode("utf-8"), timeout=12)
+        print(f"[ntfy] HTTP {r.status_code} title='{t_ascii}'")
     except Exception as e:
         print(f"[ntfy] exception: {e}")
-
 
 def load_state():
     if STATE_FILE.exists():
