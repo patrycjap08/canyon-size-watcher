@@ -2,12 +2,15 @@ name: canyon-size-watcher
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # co 15 minut
-  workflow_dispatch:         # pozwala uruchomić ręcznie z karty Actions
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      NTFY_TOPIC: "gosia-canyon-alert"   # <<< USTAW TU DOKŁADNIE TEN SAM TEMAT CO W APLIKACJI
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +27,22 @@ jobs:
       - name: Install deps
         run: pip install requests beautifulsoup4
 
-      - name: Run watcher (FORCE_ALERT)
+      - name: Boot ping (curl)
+        run: |
+          echo "NTFY_TOPIC=${NTFY_TOPIC}"
+          curl -H "Title: 🟢 Boot ping (curl)" -H "Priority: high" \
+               -d "Workflow wystartował" \
+               "https://ntfy.sh/${NTFY_TOPIC}"
+
+      - name: Run watcher (FORCE_ALERT=1 na test)
         env:
-          FORCE_ALERT: "1"     # <--- tylko do testu; potem usuń lub daj "0"
+          NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
+          FORCE_ALERT: "1"
         run: python watcher.py
 
+      - name: Finish ping (curl) - zawsze
+        if: always()
+        run: |
+          curl -H "Title: ✅ Finish ping (curl)" -H "Priority: high" \
+               -d "Workflow zakończony (sprawdź logi)" \
+               "https://ntfy.sh/${NTFY_TOPIC}"
