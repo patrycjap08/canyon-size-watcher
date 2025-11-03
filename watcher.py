@@ -95,6 +95,12 @@ def main():
         try:
             html = get_html(t["url"])
             size_map = parse_size_statuses(html)
+            # >>> TEST: wymuś jedno powiadomienie ze snapshotem (potem usuń te linie) <<<
+            snapshot = "\n".join(sizes_snapshot_lines(size_map))
+            msg = f"{t['name']} – przegląd rozmiarów\n{t['url']}\n\n{snapshot}"
+            notify("🔔 TEST – snapshot rozmiarów", msg)
+            # <<< KONIEC TESTU >>>
+
 
             # log do Actions: pełna tabelka
             print(f"\n=== {t['name']} ===")
@@ -112,7 +118,11 @@ def main():
                 state[key] = new_val
             else:
                 if new_val != prev_val:
-                    should_alert = True
+                    if ALERT_ONLY_WHEN_AVAILABLE:
+                        should_alert = (new_val == "available")
+                    else:
+                        should_alert = True
+
                     
                     state[key] = new_val
 
