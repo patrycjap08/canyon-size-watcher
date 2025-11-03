@@ -2,8 +2,11 @@ import json, re, os, time, requests
 from bs4 import BeautifulSoup
 from pathlib import Path
 
+import os
+
+NTFY_TOPIC = os.getenv("NTFY_TOPIC", "gosia-canyon-alert")  # <- ENV ma pierwszeństwo
+
 # ===== KONFIG =====
-NTFY_TOPIC = "gosia-canyon-alert"   # <- nazwa tematu w apce ntfy
 WATCH_SIZE = "2XS"                  # <- obserwowany rozmiar
 ALERT_ONLY_WHEN_AVAILABLE = True    # True = alert tylko przy przejściu na "available"
 FORCE_ALERT = os.getenv("FORCE_ALERT") == "1"  # wymuś powiadomienie na starcie (test)
