@@ -4,6 +4,9 @@ from pathlib import Path
 
 import os
 
+SIMULATE_CHANGE = os.getenv("SIMULATE_CHANGE")  # "available" albo "unavailable" albo pusty
+SIMULATE_ONLY_TARGET = os.getenv("SIMULATE_ONLY_TARGET")  # opcjonalnie fragment nazwy, np. "R138_P01"
+
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "gosia-canyon-alert")  # <- ENV ma pierwszeństwo
 
 # ===== KONFIG =====
@@ -127,6 +130,13 @@ def main():
 
             # 3) Normalna logika zmian dla 2XS
             new_val = size_map.get(WATCH_SIZE, "unknown")
+            # --- TEST: symulacja zmiany statusu 2XS ---
+            if SIMULATE_CHANGE:
+                if not SIMULATE_ONLY_TARGET or SIMULATE_ONLY_TARGET in t["name"]:
+                    print(f"[TEST] Overriding {WATCH_SIZE} for {t['name']} -> {SIMULATE_CHANGE}")
+                    new_val = SIMULATE_CHANGE
+            # ------------------------------------------
+
             key = f"{t['name']}|{WATCH_SIZE}"
             prev_val = state.get(key)
 
