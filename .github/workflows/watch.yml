@@ -39,6 +39,13 @@ jobs:
           NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
           FORCE_ALERT: "1"
         run: python watcher.py
+      - name: Run watcher (simulate AVAILABLE once)
+        env:
+          NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
+          SIMULATE_CHANGE: "available"       # <- tu wymuszamy "pojawiło się"
+          # SIMULATE_ONLY_TARGET: "R138_P01" # <- opcjonalnie: przetestuj tylko 1 kolor
+        run: python watcher.py
+
 
       - name: Finish ping (curl) - zawsze
         if: always()
