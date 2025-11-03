@@ -33,7 +33,7 @@ jobs:
                -d "Workflow wystartował" \
                "https://ntfy.sh/${NTFY_TOPIC}"
 
-      - name: Run watcher (TEST: FORCE + SIMULATE)
+      - name: Run watcher (TEST FORCE + SIMULATE)
         env:
           NTFY_TOPIC: "${{ env.NTFY_TOPIC }}"
           WATCH_SIZE: "2XS"
