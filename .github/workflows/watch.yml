@@ -26,13 +26,6 @@ jobs:
 
       - name: Run watcher (FORCE_ALERT)
         env:
-          FORCE_ALERT: "1"
+          FORCE_ALERT: "1"     # <--- tylko do testu; potem usuń lub daj "0"
         run: python watcher.py
-
-      - name: Backup ping via curl (only when FORCE_ALERT)
-        if: env.FORCE_ALERT == '1'
-        run: |
-          curl -H "Title: 🔔 Backup ping (curl)" -H "Priority: high" \
-               -d "To jest zapasowy ping z workflow – jeśli to widzisz, kanał ntfy działa, a Python mógł się wywalić wcześniej." \
-               https://ntfy.sh/gosia-canyon-alert
 
