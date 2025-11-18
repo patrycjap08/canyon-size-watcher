@@ -12,7 +12,7 @@ jobs:
       NTFY_TOPIC: "gosia-canyon-alert"   # dokładnie ten sam temat co w apce
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Restore state cache
         uses: actions/cache@v4
